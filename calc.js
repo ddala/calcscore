@@ -33,7 +33,7 @@ function showMessage(message, type = 'danger') {
     if (!alertBox) return;
 
     alertBox.textContent = message;
-    alertBox.className = `alert alert-${type} text-center position-fixed top-0 start-50 translate-middle-x w-75 shadow`;
+    alertBox.className = `alert-${type}`;
     alertBox.classList.add('show');
 
     setTimeout(() => alertBox.classList.remove('show'), ALERT_TIMEOUT_MS);
@@ -217,29 +217,28 @@ function renderResults(teamScores) {
 
     for (const { score, teamName, totalPlayers } of teamScores) {
         const item = document.createElement('div');
-        item.className = 'list-group-item d-flex align-items-center';
+        item.className = 'result-item';
 
         const isWinner = score === maxScore;
 
         if (isWinner) {
-            item.style.borderLeft = '4px solid var(--bs-warning)';
+            item.style.borderLeft = '3px solid var(--yellow)';
         }
 
         item.innerHTML = `
-            <div class="flex-grow-1">
-                <strong>${teamName}</strong>
-                ${isWinner ? ' 🏆' : ''}
+            <div class="result-name">
+                ${teamName}${isWinner ? ' 🏆' : ''}
             </div>
-            <div style="min-width: 70px;" class="text-end fw-bold">${score}</div>
-            <div style="min-width: 90px;" class="text-end text-muted small">${totalPlayers} players</div>
+            <div class="result-score">${score}</div>
+            <div class="result-players">${totalPlayers} players</div>
         `;
 
         resultList.appendChild(item);
     }
 
-    resultElement.classList.remove('d-none');
+    resultElement.classList.remove('hidden');
     if (copyButton) {
-        copyButton.classList.remove('d-none');
+        copyButton.classList.remove('hidden');
     }
 }
 
@@ -259,10 +258,10 @@ function renderPointsDifference(teamScores) {
 
     const summaryDiv = document.createElement('div');
     summaryDiv.id = 'pointsDifference';
-    summaryDiv.className = 'mt-1 py-2 text-center';
+    summaryDiv.className = 'points-diff';
 
     if (diff === 0) {
-        summaryDiv.innerHTML = '<span class="text-secondary">Tie game</span>';
+        summaryDiv.innerHTML = '<span>Tie game</span>';
     } else {
         const leader = diff > 0 ? teamA.teamName : teamB.teamName;
         summaryDiv.innerHTML = `<strong>${leader}</strong> ahead by <strong>${absDiff}</strong> points`;
@@ -376,7 +375,7 @@ function generateTeamInputs(teamCount) {
 
     for (let i = 1; i <= inputCount; i++) {
         const teamDiv = document.createElement('div');
-        teamDiv.className = 'mb-3';
+        teamDiv.className = 'form-group';
         teamDiv.innerHTML = `
             <label for="team${i}PositionsInput" class="form-label" id="team${i}PositionsLabel">
                 Team ${i} positions:
@@ -543,7 +542,43 @@ function initApp() {
 
     const saveSettingsButton = document.getElementById('saveSettingsButton');
     if (saveSettingsButton) {
-        saveSettingsButton.addEventListener('click', saveSettings);
+        saveSettingsButton.addEventListener('click', () => {
+            saveSettings();
+            closeModal();
+        });
+    }
+
+    // Modal open/close
+    const settingsModal = document.getElementById('settingsModal');
+
+    function openModal() {
+        if (settingsModal) settingsModal.classList.add('open');
+    }
+
+    function closeModal() {
+        if (settingsModal) settingsModal.classList.remove('open');
+    }
+
+    const openSettingsButton = document.getElementById('openSettingsButton');
+    if (openSettingsButton) {
+        openSettingsButton.addEventListener('click', openModal);
+    }
+
+    const closeSettingsButton = document.getElementById('closeSettingsButton');
+    if (closeSettingsButton) {
+        closeSettingsButton.addEventListener('click', closeModal);
+    }
+
+    const cancelSettingsButton = document.getElementById('cancelSettingsButton');
+    if (cancelSettingsButton) {
+        cancelSettingsButton.addEventListener('click', closeModal);
+    }
+
+    // Close modal on overlay click
+    if (settingsModal) {
+        settingsModal.addEventListener('click', (e) => {
+            if (e.target === settingsModal) closeModal();
+        });
     }
 }
 
