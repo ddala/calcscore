@@ -21,7 +21,7 @@ const BASE_SCORES = [
     5, 5, 5, 4, 4, 4, 4, 3, 3, 3,
     3, 3, 3, 2, 2, 2, 2, 2, 2, 2,
     2, 2, 2, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 ];
 
 // ========================================
@@ -99,7 +99,7 @@ function getPositions(input) {
 }
 
 function validateAllInputs(numberOfTeams, totalPlayerCount, teamNames) {
-    const positionsTaken = [];
+    const positionsTaken = new Set();
 
     // Validate total player count
     if (isNaN(totalPlayerCount) || totalPlayerCount <= 0) {
@@ -139,13 +139,13 @@ function validateAllInputs(numberOfTeams, totalPlayerCount, teamNames) {
             }
 
             // Check for overlaps with other teams
-            const duplicates = positions.filter(p => positionsTaken.includes(p));
+            const duplicates = positions.filter(p => positionsTaken.has(p));
             if (duplicates.length > 0) {
                 showError(`${teamNames[i - 1]} has overlapping positions: ${duplicates.join(', ')}`);
                 return null;
             }
 
-            positionsTaken.push(...positions);
+            for (const p of positions) positionsTaken.add(p);
         } else {
             // Last team gets remaining positions
             positions = getMissingNumbers(positionsTaken, totalPlayerCount);
@@ -164,9 +164,12 @@ function validateAllInputs(numberOfTeams, totalPlayerCount, teamNames) {
 // SCORING LOGIC
 // ========================================
 
-function getMissingNumbers(positions, total) {
-    const allPositions = Array.from({ length: total }, (_, i) => i + 1);
-    return allPositions.filter(p => !positions.includes(p));
+function getMissingNumbers(positionsTaken, total) {
+    const remaining = [];
+    for (let i = 1; i <= total; i++) {
+        if (!positionsTaken.has(i)) remaining.push(i);
+    }
+    return remaining;
 }
 
 function calculateTeamScore(positions, iccMode) {
@@ -203,19 +206,11 @@ function calculateTeamScore(positions, iccMode) {
 
 function renderResults(teamScores) {
     const resultElement = document.getElementById('result');
+    const resultList = document.getElementById('resultList');
     const copyButton = document.getElementById('copyButton');
 
-    if (!resultElement) return;
+    if (!resultElement || !resultList) return;
 
-    resultElement.innerHTML = '<h3>Results</h3>';
-
-    let resultList = document.getElementById('resultList');
-    if (!resultList) {
-        resultList = document.createElement('div');
-        resultList.id = 'resultList';
-        resultList.className = 'list-group mt-2';
-        resultElement.appendChild(resultList);
-    }
     resultList.innerHTML = '';
 
     const maxScore = Math.max(...teamScores.map(t => t.score));
@@ -254,11 +249,16 @@ function renderPointsDifference(teamScores) {
     const resultElement = document.getElementById('result');
     if (!resultElement) return;
 
+    // Remove any previous summary
+    const existingSummary = document.getElementById('pointsDifference');
+    if (existingSummary) existingSummary.remove();
+
     const [teamA, teamB] = teamScores;
     const diff = teamA.score - teamB.score;
     const absDiff = Math.abs(diff);
 
     const summaryDiv = document.createElement('div');
+    summaryDiv.id = 'pointsDifference';
     summaryDiv.className = 'mt-1 py-2 text-center';
 
     if (diff === 0) {
@@ -491,12 +491,36 @@ function copyResults() {
 // INITIALIZATION
 // ========================================
 
+function fillTestData() {
+    if (!new URLSearchParams(window.location.search).has('debug')) return;
+
+    const teamCountSelect = document.getElementById('teamCountSelect');
+    if (!teamCountSelect) return;
+
+    const teamCount = parseInt(teamCountSelect.value);
+
+    const testData = {
+        2: ['1-3,7,10,15-20,30,42'],
+        3: ['1-5,16-20,45-50', '6-10,21-25,51-55'],
+        4: ['1-5,21-25', '6-10,26-30', '11-15,31-35']
+    };
+
+    const data = testData[teamCount] || testData[2];
+    data.forEach((positions, i) => {
+        const input = document.getElementById(`team${i + 1}PositionsInput`);
+        if (input) input.value = positions;
+    });
+}
+
 function initApp() {
     // Initialize settings from localStorage
     initSettings();
 
     // Generate initial team inputs
     updateTeamInputs();
+
+    // Fill test data if ?debug is in the URL
+    fillTestData();
 
     // Attach event listeners
     const calculateButton = document.getElementById('calculateScoresButton');
@@ -506,7 +530,10 @@ function initApp() {
 
     const teamCountSelect = document.getElementById('teamCountSelect');
     if (teamCountSelect) {
-        teamCountSelect.addEventListener('change', updateTeamInputs);
+        teamCountSelect.addEventListener('change', () => {
+            updateTeamInputs();
+            fillTestData();
+        });
     }
 
     const copyButton = document.getElementById('copyButton');
