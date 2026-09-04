@@ -4,83 +4,83 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Calcscore is a simple web application for calculating standings in ICC (Inter-Clan Challenge) matches in HCR2 (Hill Climb Racing 2). It's a vanilla HTML/CSS/JavaScript application with no build system or dependencies beyond Bootstrap 5.
+Calcscore is a simple web application for calculating standings in ICC (Inter-Clan Challenge) matches in HCR2 (Hill Climb Racing 2). It's vanilla HTML/CSS/JavaScript with no build system and no dependencies — the only external resource is a Google Fonts stylesheet.
 
 ## Architecture
 
-This is a single-page application consisting of three files:
-- `index.html` - UI structure with Bootstrap 5 dark theme
-- `calc.js` - All application logic and scoring calculations
-- `icclogo.png` - ICC logo displayed in navbar
+Two pages sharing one stylesheet and one constants file:
 
-### Key Components
+- `index.html` — the score calculator
+- `simulation.html` — the max-score tie simulation
+- `styles.css` — all styling for both pages, including the design tokens in `:root`
+- `shared.js` — `BASE_SCORES` and the alert helpers, loaded by both pages
+- `calc.js` — calculator logic (loaded by `index.html` only)
+- `simulation.js` — simulation logic (loaded by `simulation.html` only)
+- `icclogo.png` — logo in the top bar
 
-**Scoring System (calc.js:157-172)**
-- `scoresList` array contains point values for positions 1-100 (defined at calc.js:157)
-- In ICC mode, 1st place gets +1 bonus point (301 total instead of 300)
-- The scoring algorithm extends the scoresList with value 1 for positions beyond 100
+Navigation between the pages is plain links in the top bar, marked with `aria-current="page"`. The two features are independent: the calculator owns the settings modal and localStorage, the simulation owns the URL query string.
 
-**State Management (calc.js:175-184)**
-- Settings stored in localStorage under key 'hcr2Settings'
-- Settings include: iccMode (boolean), sortScores (boolean), teamNames (array of 4 strings)
-- Default settings: ICC mode enabled, sorting disabled, default team names "Team 1" through "Team 4"
+### Key components
 
-**Team Calculation Logic (calc.js:14-119)**
-- Supports 2-4 teams
-- For n teams, only n-1 teams require position input (last team auto-calculated from remaining positions)
-- Position input format: comma-separated values with range support (e.g., "1,3-4,6,9,12-14")
-- Validation ensures: no overlapping positions, all positions within 1-totalPlayerCount range
+**Scoring system (`shared.js`)**
+- `BASE_SCORES` holds point values for positions 1–100 and is never mutated; callers copy it.
+- In ICC mode 1st place gets +1 (301 instead of 300).
+- The calculator extends the list with 1 for positions beyond 100.
 
-**UI Patterns**
-- Error/success messages use animated alerts (showMessage/showError/showSuccess at calc.js:1-12)
-- Winner highlighting: team(s) with max score get trophy emoji and warning border (calc.js:87-92)
-- For 2-team matches, displays point difference summary (calc.js:97-115)
-- Results can be copied to clipboard via copy button (calc.js:121-127)
+**Team calculation (`calc.js`)**
+- Supports 2–4 teams. For n teams only n−1 need position input; the last is derived from the remaining positions.
+- Position input is comma-separated with ranges: `1,3-4,6,9,12-14`.
+- Validation rejects overlapping positions and anything outside 1–totalPlayerCount.
 
-## Running the Application
+**Settings (`calc.js`)**
+- localStorage key `hcr2Settings`: `iccMode`, `sortScores`, `teamNames` (4 strings).
+- Defaults: ICC mode on, sorting off, "Team 1"–"Team 4". All access is wrapped in try/catch.
 
-This is a static website with no build process. To run:
+**Simulation (`simulation.js`)**
+- Monte Carlo over random orderings of a max-score tie between two teams, with a seeded PRNG so a run is reproducible.
+- Team A's score determines the points gap (`gap = 2·scoreA − pointsAtStake`), so one `Int32Array` tally indexed by that score holds the exact distribution — that is what the median and the histogram read from.
+- The run is mirrored into the query string (`?a=&b=&runs=&seed=&margin=`) via `history.replaceState`, including the resolved seed. Opening such a link prefills the form and runs it automatically, which is how sharing works.
+- Team A/B colors (`--team-a`, `--team-b`) were chosen to pass OKLCH lightness, chroma and colour-blind separation checks against the dark surface. Re-validate before changing them.
+
+## Running the application
+
+Static site, no build step:
 
 ```bash
-# Serve locally (any method works):
 python -m http.server 8000
 # OR
 npx serve .
-# OR open index.html directly in browser (file://)
+# OR open index.html directly (file://)
 ```
-
-Then navigate to http://localhost:8000
 
 ## Testing
 
-No automated tests exist. Manual testing workflow:
-1. Test 2/3/4 team configurations
-2. Verify position parsing: single values, ranges, mixed input
-3. Verify error cases: overlapping positions, invalid ranges, out-of-bounds positions
-4. Test ICC mode on/off (1st place should be 301 vs 300 points)
-5. Test settings persistence across page reloads
-6. Test copy results button
+No automated tests. Manual workflow:
 
-## Code Organization
+Calculator
+1. 2/3/4 team configurations
+2. Position parsing: single values, ranges, mixed input
+3. Error cases: overlapping positions, invalid ranges, out-of-bounds positions
+4. ICC mode on/off (1st place 301 vs 300)
+5. Settings persistence across reloads
+6. Copy results button
 
-calc.js is organized into clear sections:
-1. **Constants & Configuration** (lines 1-25) - All magic numbers, default values, and the BASE_SCORES array
-2. **Utility Functions** (lines 27-48) - Message display functions
-3. **Validation Functions** (lines 50-161) - Input parsing and validation logic
-4. **Scoring Logic** (lines 163-193) - Score calculation and helper functions
-5. **UI Rendering** (lines 195-273) - Results display and winner highlighting
-6. **Settings Management** (lines 275-363) - localStorage operations for user preferences
-7. **Team Input Management** (lines 365-420) - Dynamic generation of team input fields
-8. **Main Calculator** (lines 422-474) - Orchestrates validation, computation, and rendering
-9. **Event Handlers** (lines 476-489) - Click handlers for buttons
-10. **Initialization** (lines 491-525) - Single initApp() function sets up the app
+Simulation
+7. Run with the defaults, then with 0 players on one side and with both sides equal
+8. Same seed twice gives identical numbers; blank seed gives a new one each run
+9. Copy share link, open it in a new tab — same inputs, same result
+10. A link with junk params shows an error and does not run
+11. Histogram hover and arrow-key readout
 
-## Code Style Notes
+## Deployment
 
-- All functions use camelCase naming convention
-- HTML uses Bootstrap 5 utilities extensively with data-bs-* attributes
-- No inline event handlers - all events attached via addEventListener
-- Team input fields are generated dynamically via JavaScript
-- BASE_SCORES array is never mutated (fresh copies created when needed)
-- All localStorage operations wrapped in try-catch for safety
-- DOM element existence checked before use to prevent errors
+Push to `main` triggers `.github/workflows/deploy.yml`, which scp's the site to `/var/www/calcscore` on the production host (nginx, calcscore.ddala.dev). GitHub Pages publishes the same branch to https://ddala.github.io/calcscore/.
+
+The workflow lists the files to copy explicitly — `appleboy/scp-action` has no `exclude` input, and copying the whole checkout once put `.git` in the web root. **Any new file the site needs must be added to `source:` in that workflow**, or it will 404 in production while working locally.
+
+## Code style
+
+- camelCase functions, no inline event handlers — everything via `addEventListener`.
+- DOM lookups are checked before use, so a shared script can run on a page that lacks those elements.
+- Result markup is built as template strings and assigned to `innerHTML`; only validated numbers are interpolated. Keep it that way — never interpolate raw user or URL text.
+- Colors, spacing and fonts come from the tokens in `styles.css`; don't hardcode hex values in markup.

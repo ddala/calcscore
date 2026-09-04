@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tie simulation – HCR2 Score Calculator</title>
+    <link rel="icon" type="image/png" href="icclogo.png">
+    <link rel="apple-touch-icon" href="icclogo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="styles.css?v=1">
+</head>
+<body>
+    <div id="errorAlert" role="alert"></div>
+
+    <header class="navbar">
+        <a class="navbar-brand" href="index.html">
+            <img src="icclogo.png" alt="ICC">
+            <span>HCR2 Score Calculator</span>
+        </a>
+        <nav class="navbar-nav" aria-label="Pages">
+            <a href="index.html">Calculator</a>
+            <a href="simulation.html" aria-current="page">Simulation</a>
+        </nav>
+    </header>
+
+    <div class="container">
+        <main>
+            <div class="page-heading">
+                <h1>Max-score tie simulation</h1>
+                <p>Estimate how randomly ordered leaderboard ties affect two teams.</p>
+            </div>
+            <form id="simulationForm">
+                <div class="form-row">
+                    <div>
+                        <label for="simulationTeamA" class="form-label">Team A max-score players</label>
+                        <input type="number" class="form-control" id="simulationTeamA" min="0" max="50" value="23">
+                    </div>
+                    <div>
+                        <label for="simulationTeamB" class="form-label">Team B max-score players</label>
+                        <input type="number" class="form-control" id="simulationTeamB" min="0" max="50" value="18">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div>
+                        <label for="simulationRuns" class="form-label">Simulations</label>
+                        <input type="number" class="form-control" id="simulationRuns" min="1" max="1000000" value="100000">
+                    </div>
+                    <div>
+                        <label for="simulationSeed" class="form-label">Random seed <span class="optional">(optional)</span></label>
+                        <input type="number" class="form-control" id="simulationSeed" step="1" placeholder="Random">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="simulationMargin" class="form-label">Minimum Team A winning margin <span class="optional">(optional)</span></label>
+                    <input type="number" class="form-control" id="simulationMargin" min="1" step="1" placeholder="e.g. 300">
+                    <span class="form-help">Reports the chance that Team A wins by at least this many points.</span>
+                </div>
+                <button type="submit" class="btn btn-primary" id="runSimulationButton">Run simulation</button>
+            </form>
+            <section id="simulationResult" class="results-section hidden" aria-live="polite">
+                <div class="results-header">
+                    <h3>Monte Carlo result</h3>
+                    <button type="button" class="btn btn-ghost" id="copySimulationLinkButton">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M6.5 9.5a2.5 2.5 0 003.5 0l2.5-2.5a2.5 2.5 0 00-3.5-3.5l-.9.9"/>
+                            <path d="M9.5 6.5a2.5 2.5 0 00-3.5 0L3.5 9a2.5 2.5 0 003.5 3.5l.9-.9"/>
+                        </svg>
+                        Copy share link
+                    </button>
+                </div>
+                <div id="simulationResultContent"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="shared.js?v=1"></script>
+    <script src="simulation.js?v=4"></script>
+</body>
+</html>

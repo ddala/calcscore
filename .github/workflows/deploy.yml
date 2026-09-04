@@ -17,5 +17,5 @@ jobs:
           # scp-action has no exclude input, so name the files that make up the
           # site. Anything not listed here stays off the web root - notably .git,
           # which is otherwise downloadable at /.git/config.
-          source: "index.html,calc.js,simulation.js,icclogo.png"
+          source: "index.html,simulation.html,styles.css,shared.js,calc.js,simulation.js,icclogo.png"
           target: "/var/www/calcscore"

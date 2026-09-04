@@ -206,7 +206,7 @@ function validateSimulationInput(teamA, teamB, simulations, margin) {
 }
 
 async function runSimulation(event) {
-    event.preventDefault();
+    event?.preventDefault();
     const teamA = Number(document.getElementById('simulationTeamA').value);
     const teamB = Number(document.getElementById('simulationTeamB').value);
     const simulations = Number(document.getElementById('simulationRuns').value);
@@ -222,6 +222,7 @@ async function runSimulation(event) {
     }
 
     const seed = parsedSeed === null ? crypto.getRandomValues(new Uint32Array(1))[0] : parsedSeed;
+    updateShareUrl(teamA, teamB, simulations, seed, minimumMargin);
     const random = seededRandom(seed);
     const tiedPlayers = teamA + teamB;
     const teams = Array.from({ length: tiedPlayers }, (_, index) => index < teamA);
@@ -317,19 +318,41 @@ async function runSimulation(event) {
     button.textContent = 'Run simulation';
 }
 
-function switchView(viewName) {
-    document.getElementById('calculatorView').classList.toggle('hidden', viewName !== 'calculator');
-    document.getElementById('simulationView').classList.toggle('hidden', viewName !== 'simulation');
-    document.querySelectorAll('[data-view]').forEach(button => {
-        const active = button.dataset.view === viewName;
-        button.classList.toggle('active', active);
-        button.setAttribute('aria-pressed', String(active));
-    });
-    history.replaceState(null, '', viewName === 'simulation' ? '#simulation' : location.pathname + location.search);
+// A run is fully described by its inputs plus the seed it landed on, so the
+// address bar can carry the whole thing. Sharing is then just copying the URL,
+// and the seed makes a shared link reproduce the same numbers.
+const SHARE_FIELDS = { a: 'simulationTeamA', b: 'simulationTeamB', runs: 'simulationRuns', seed: 'simulationSeed', margin: 'simulationMargin' };
+
+function applySharedInputs() {
+    const params = new URLSearchParams(location.search);
+    let shared = false;
+    for (const [key, id] of Object.entries(SHARE_FIELDS)) {
+        const value = (params.get(key) ?? '').trim();
+        if (!value) continue;
+        document.getElementById(id).value = value;
+        shared = true;
+    }
+    return shared;
+}
+
+function updateShareUrl(teamA, teamB, simulations, seed, minimumMargin) {
+    const params = new URLSearchParams({ a: teamA, b: teamB, runs: simulations, seed });
+    if (minimumMargin !== null) params.set('margin', minimumMargin);
+    history.replaceState(null, '', `${location.pathname}?${params}`);
+}
+
+async function copyShareLink() {
+    try {
+        await navigator.clipboard.writeText(location.href);
+        showSuccess('Link copied. It opens with these settings and reruns the same seed.');
+    } catch {
+        showError('Could not reach the clipboard. Copy the link from the address bar instead.');
+    }
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => switchView(button.dataset.view)));
     document.getElementById('simulationForm').addEventListener('submit', runSimulation);
-    if (location.hash === '#simulation') switchView('simulation');
+    document.getElementById('copySimulationLinkButton').addEventListener('click', copyShareLink);
+    // A shared link should show its result, not just its inputs.
+    if (applySharedInputs()) runSimulation();
 });
