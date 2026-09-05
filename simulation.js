@@ -1,5 +1,6 @@
 const MAX_SIMULATIONS = 1000000;
 const HISTOGRAM_BINS = 41;
+const MAX_BANKED_POINTS = 100000;
 
 function seededRandom(seed) {
     let state = seed >>> 0;
@@ -196,12 +197,42 @@ function renderDetails(entries) {
     return `<div class="detail-grid">${cells}</div>`;
 }
 
-function validateSimulationInput(teamA, teamB, simulations, margin) {
+function readOptionalNumber(id) {
+    const raw = document.getElementById(id).value.trim();
+    return raw === '' ? 0 : Number(raw);
+}
+
+// One row of the average-split readout: who, how much, and where it came from.
+function renderBreakdownRow(className, name, value, detail) {
+    return `<div>
+            <span class="name"><i class="swatch ${className}"></i>${name}</span>
+            <span class="value">${value}</span>
+            <span class="detail">${detail}</span>
+        </div>`;
+}
+
+function renderAverageSplit(averageA, averageB, detailA, detailB) {
+    const total = averageA + averageB;
+    const bar = total === 0 ? '' : `<div class="split-bar" role="img" aria-label="Team A ${formatNumber(averageA, 2)}, Team B ${formatNumber(averageB, 2)}">
+            <div class="split-seg team-a" style="flex: ${averageA}"></div>
+            <div class="split-seg team-b" style="flex: ${averageB}"></div>
+        </div>`;
+    return `${bar}
+        <div class="split-breakdown">
+            ${renderBreakdownRow('team-a', 'Team A', formatNumber(averageA, 2), detailA)}
+            ${renderBreakdownRow('team-b', 'Team B', formatNumber(averageB, 2), detailB)}
+        </div>`;
+}
+
+function validateSimulationInput(teamA, teamB, simulations, margin, bankedA, bankedB) {
     if (!Number.isInteger(teamA) || teamA < 0 || teamA > 50) return 'Team A must have 0–50 max-score players.';
     if (!Number.isInteger(teamB) || teamB < 0 || teamB > 50) return 'Team B must have 0–50 max-score players.';
     if (teamA + teamB > BASE_SCORES.length) return `The combined count cannot exceed ${BASE_SCORES.length}.`;
     if (!Number.isInteger(simulations) || simulations < 1 || simulations > MAX_SIMULATIONS) return `Simulations must be between 1 and ${MAX_SIMULATIONS.toLocaleString()}.`;
     if (margin !== null && (!Number.isInteger(margin) || margin < 1)) return 'Minimum margin must be a positive whole number.';
+    for (const points of [bankedA, bankedB]) {
+        if (!Number.isInteger(points) || points < 0 || points > MAX_BANKED_POINTS) return `Points from other players must be whole numbers from 0 to ${formatNumber(MAX_BANKED_POINTS)}.`;
+    }
     return null;
 }
 
@@ -213,7 +244,9 @@ async function runSimulation(event) {
     const seedInput = document.getElementById('simulationSeed').value.trim();
     const marginInput = document.getElementById('simulationMargin').value.trim();
     const minimumMargin = marginInput === '' ? null : Number(marginInput);
-    const error = validateSimulationInput(teamA, teamB, simulations, minimumMargin);
+    const bankedA = readOptionalNumber('simulationBankedA');
+    const bankedB = readOptionalNumber('simulationBankedB');
+    const error = validateSimulationInput(teamA, teamB, simulations, minimumMargin, bankedA, bankedB);
     if (error) return showError(error);
 
     const parsedSeed = seedInput === '' ? null : Number(seedInput);
@@ -222,7 +255,7 @@ async function runSimulation(event) {
     }
 
     const seed = parsedSeed === null ? crypto.getRandomValues(new Uint32Array(1))[0] : parsedSeed;
-    updateShareUrl(teamA, teamB, simulations, seed, minimumMargin);
+    updateShareUrl({ teamA, teamB, simulations, seed, minimumMargin, bankedA, bankedB });
     const random = seededRandom(seed);
     const tiedPlayers = teamA + teamB;
     const teams = Array.from({ length: tiedPlayers }, (_, index) => index < teamA);
@@ -231,48 +264,63 @@ async function runSimulation(event) {
     button.disabled = true;
     button.textContent = 'Simulating…';
 
-    let teamAWins = 0, teamBWins = 0, draws = 0, marginWins = 0;
-    let totalA = 0, totalB = 0;
-    // Team A's score fixes the gap (gap = 2·scoreA − pointsAtStake), so a single
-    // tally indexed by that score holds the exact distribution of every run.
+    // Team A's score fixes everything else: Team B takes whatever is left of the
+    // pot, so one tally indexed by Team A's score holds the exact distribution.
     const scoreCounts = new Int32Array(pointsAtStake + 1);
     const chunkSize = 5000;
 
-    for (let start = 0; start < simulations; start += chunkSize) {
-        const end = Math.min(start + chunkSize, simulations);
-        for (let run = start; run < end; run++) {
-            for (let i = tiedPlayers - 1; i > 0; i--) {
-                const j = Math.floor(random() * (i + 1));
-                [teams[i], teams[j]] = [teams[j], teams[i]];
+    try {
+        for (let start = 0; start < simulations; start += chunkSize) {
+            const end = Math.min(start + chunkSize, simulations);
+            for (let run = start; run < end; run++) {
+                for (let i = tiedPlayers - 1; i > 0; i--) {
+                    const j = Math.floor(random() * (i + 1));
+                    [teams[i], teams[j]] = [teams[j], teams[i]];
+                }
+                let scoreA = 0;
+                for (let position = 0; position < tiedPlayers; position++) {
+                    if (teams[position]) scoreA += BASE_SCORES[position];
+                }
+                scoreCounts[scoreA]++;
             }
-            let scoreA = 0, scoreB = 0;
-            for (let position = 0; position < tiedPlayers; position++) {
-                if (teams[position]) scoreA += BASE_SCORES[position];
-                else scoreB += BASE_SCORES[position];
-            }
-            const difference = scoreA - scoreB;
-            if (difference > 0) teamAWins++;
-            else if (difference < 0) teamBWins++;
-            else draws++;
-            if (minimumMargin !== null && difference >= minimumMargin) marginWins++;
-            totalA += scoreA;
-            totalB += scoreB;
-            scoreCounts[scoreA]++;
+            button.textContent = `Simulating… ${Math.round(end / simulations * 100)}%`;
+            await new Promise(resolve => setTimeout(resolve, 0));
         }
-        button.textContent = `Simulating… ${Math.round(end / simulations * 100)}%`;
-        await new Promise(resolve => setTimeout(resolve, 0));
+    } finally {
+        button.disabled = false;
+        button.textContent = 'Run simulation';
     }
 
-    // Re-index the tally by points gap: scoreA maps to gap 2·scoreA − pointsAtStake,
-    // which keeps every derived figure below reading from one source.
+    // Points already banked outside the tie shift every comparison, so they are
+    // folded in here rather than added to the display afterwards: a run is a win
+    // for Team A only if the tie plus what each side already holds comes out ahead.
+    const banked = bankedA - bankedB;
+    const hasBanked = bankedA > 0 || bankedB > 0;
+    let teamAWins = 0, teamBWins = 0, draws = 0, marginWins = 0, tieTotalA = 0;
+    for (let score = 0; score <= pointsAtStake; score++) {
+        const count = scoreCounts[score];
+        if (!count) continue;
+        tieTotalA += score * count;
+        const gap = 2 * score - pointsAtStake + banked;
+        if (gap > 0) teamAWins += count;
+        else if (gap < 0) teamBWins += count;
+        else draws += count;
+        if (minimumMargin !== null && gap >= minimumMargin) marginWins += count;
+    }
+
+    const averageTieA = tieTotalA / simulations;
+    const averageTieB = pointsAtStake - averageTieA;
+
+    // Re-index the tally by points gap, carrying the banked offset so the chart's
+    // centre line is the real break-even point and every figure reads from here.
     const gapCounts = new Int32Array(2 * pointsAtStake + 1);
     for (let score = 0; score <= pointsAtStake; score++) gapCounts[2 * score] = scoreCounts[score];
-    const gapOffset = -pointsAtStake;
+    const gapOffset = -pointsAtStake + banked;
     const gapAt = quantile => quantileFromCounts(gapCounts, gapOffset, simulations, quantile);
     const lowestGap = gapAt(0);
     const highestGap = gapAt(1);
 
-    const averageGap = (totalA - totalB) / simulations;
+    const averageGap = averageTieA - averageTieB + banked;
     const [ciLow, ciHigh] = wilsonInterval(teamAWins, simulations);
     const details = [
         ['Simulated runs', formatNumber(simulations)],
@@ -281,6 +329,7 @@ async function runSimulation(event) {
         ['Points at stake', formatNumber(pointsAtStake)],
         ['95% confidence', `${(ciLow * 100).toFixed(2)}–${(ciHigh * 100).toFixed(2)}%`]
     ];
+    if (hasBanked) details.push(['From other players', `A ${formatNumber(bankedA)}, B ${formatNumber(bankedB)}`]);
     if (draws > 0) details.push(['Dead heats', `${formatNumber(draws)} runs`]);
 
     const threshold = minimumMargin === null ? '' : `<div class="sim-panel threshold">
@@ -288,15 +337,29 @@ async function runSimulation(event) {
             <span class="figure-value">${formatPercent(marginWins, simulations)}</span>
         </div>`;
 
+    const shareOfStake = points => pointsAtStake === 0 ? 'no points at stake' : `${(points / pointsAtStake * 100).toFixed(2)}% of the tie`;
+    const split = hasBanked
+        ? `<div class="sim-panel">
+            <h4>Expected match score</h4>
+            ${renderAverageSplit(bankedA + averageTieA, bankedB + averageTieB,
+                `${formatNumber(bankedA)} banked plus ${formatNumber(averageTieA, 2)} from the tie`,
+                `${formatNumber(bankedB)} banked plus ${formatNumber(averageTieB, 2)} from the tie`)}
+        </div>`
+        : `<div class="sim-panel">
+            <h4>Average split of the ${formatNumber(pointsAtStake)} points at stake</h4>
+            ${renderAverageSplit(averageTieA, averageTieB, shareOfStake(averageTieA), shareOfStake(averageTieB))}
+        </div>`;
+
     document.getElementById('simulationResultContent').innerHTML = `
         <div class="sim-panel">
-            <div class="verdict-label">Team A wins the tie</div>
+            <div class="verdict-label">Team A wins the ${hasBanked ? 'match' : 'tie'}</div>
             <div class="verdict-value">${formatPercent(teamAWins, simulations)}</div>
             <div class="verdict-reading">${describeChance(teamAWins, simulations)}</div>
             ${renderSplitBar(teamAWins, teamBWins, draws, simulations)}
         </div>
+        ${split}
         <div class="sim-panel">
-            <h4>Points gap, Team A minus Team B</h4>
+            <h4>${hasBanked ? 'Final' : 'Tie'} points gap, Team A minus Team B</h4>
             <div class="figure-row">
                 <div>
                     <div class="figure-label">Average</div>
@@ -311,17 +374,19 @@ async function runSimulation(event) {
         </div>
         ${threshold}
         <div class="sim-panel">${renderDetails(details)}</div>
-        <p class="simulation-note">Every ordering of the tied players is treated as equally likely. Players outside the tied group are left out.</p>`;
+        <p class="simulation-note">Every ordering of the tied players is treated as equally likely. Players outside the tied group are left out${hasBanked ? ', apart from the points entered above, which are treated as already settled' : ''}.</p>`;
     attachGapChartHover();
     document.getElementById('simulationResult').classList.remove('hidden');
-    button.disabled = false;
-    button.textContent = 'Run simulation';
 }
 
 // A run is fully described by its inputs plus the seed it landed on, so the
 // address bar can carry the whole thing. Sharing is then just copying the URL,
 // and the seed makes a shared link reproduce the same numbers.
-const SHARE_FIELDS = { a: 'simulationTeamA', b: 'simulationTeamB', runs: 'simulationRuns', seed: 'simulationSeed', margin: 'simulationMargin' };
+const SHARE_FIELDS = {
+    a: 'simulationTeamA', b: 'simulationTeamB', runs: 'simulationRuns',
+    seed: 'simulationSeed', margin: 'simulationMargin',
+    pa: 'simulationBankedA', pb: 'simulationBankedB'
+};
 
 function applySharedInputs() {
     const params = new URLSearchParams(location.search);
@@ -332,12 +397,16 @@ function applySharedInputs() {
         document.getElementById(id).value = value;
         shared = true;
     }
+    // A link carrying banked points should show where they came from.
+    if (params.get('pa') || params.get('pb')) document.getElementById('bankedPointsSection').open = true;
     return shared;
 }
 
-function updateShareUrl(teamA, teamB, simulations, seed, minimumMargin) {
+function updateShareUrl({ teamA, teamB, simulations, seed, minimumMargin, bankedA, bankedB }) {
     const params = new URLSearchParams({ a: teamA, b: teamB, runs: simulations, seed });
     if (minimumMargin !== null) params.set('margin', minimumMargin);
+    if (bankedA > 0) params.set('pa', bankedA);
+    if (bankedB > 0) params.set('pb', bankedB);
     history.replaceState(null, '', `${location.pathname}?${params}`);
 }
 

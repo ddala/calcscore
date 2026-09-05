@@ -349,6 +349,40 @@ body {
 .form-help { display: block; margin-top: 0.3rem; }
 .optional { color: var(--text-dim); font-weight: 300; }
 
+/* --- Optional inputs, collapsed until wanted --- */
+.extra-options {
+    margin-bottom: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.extra-options > summary {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 0.9rem;
+    color: var(--text-dim);
+    font-size: 0.84rem;
+    cursor: pointer;
+    list-style: none;
+}
+
+.extra-options > summary::-webkit-details-marker { display: none; }
+
+.extra-options > summary::before {
+    content: '+';
+    font: 700 0.95rem 'JetBrains Mono', monospace;
+}
+
+.extra-options[open] > summary::before { content: '2'; }
+.extra-options > summary:hover { color: var(--text); }
+.extra-options > summary:focus-visible { outline: 1px solid var(--text-dim); outline-offset: -3px; }
+.extra-options[open] > summary { color: var(--text); border-bottom: 1px solid var(--border); }
+
+.extra-options-body { padding: 0.85rem 0.9rem 0.1rem; }
+.extra-options-body .form-help { margin: 0 0 0.75rem; }
+
 /* --- Simulation result --- */
 .sim-panel {
     padding: 1rem;
@@ -398,6 +432,31 @@ body {
 .swatch.team-a { background: var(--team-a); }
 .swatch.team-b { background: var(--team-b); }
 .swatch.tie { background: var(--text-dim); }
+
+.split-breakdown {
+    display: grid;
+    gap: 0.45rem;
+    margin-top: 0.7rem;
+}
+
+.split-breakdown > div {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.6rem;
+}
+
+.split-breakdown .name {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 4.5rem;
+    color: var(--text);
+    font-size: 0.84rem;
+}
+
+.split-breakdown .value { font: 700 1rem 'JetBrains Mono', monospace; color: var(--accent); }
+.split-breakdown .detail { color: var(--text-dim); font-size: 0.76rem; }
 
 .figure-row {
     display: grid;
